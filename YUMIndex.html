@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YUM! Live Order Board - Cloud Project</title>
+
+    <style>
+        body { font-family: sans-serif; margin: 0; background-color: #eaf0f4; }
+        .app-container { padding: 20px; }
+        h1 { text-align: center; color: #d35400; margin-bottom: 30px; border-bottom: 2px solid #e67e22; padding-bottom: 10px; }
+        
+        /* FORM STYLES */
+        .order-form-container {
+            max-width: 600px;
+            margin: 0 auto 30px;
+            padding: 25px;
+            background-color: #ffffff; 
+            border-radius: 10px;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+            border-top: 5px solid #2ecc71; 
+        }
+        .order-form-container h2 { 
+            margin-top: 0; 
+            color: #2ecc71; 
+            text-align: center; 
+            margin-bottom: 20px;
+        }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #34495e; }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #c2c9d1;
+            border-radius: 4px;
+            box-sizing: border-box; 
+        }
+        .submit-button {
+            width: 100%;
+            padding: 12px;
+            background-color: #2ecc71;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1.1em;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+        .submit-button:hover { background-color: #27ae60; }
+
+        /* BOARD LAYOUT STYLES */
+        .board { display: flex; gap: 20px; overflow-x: auto; padding-bottom: 20px; }
+        .order-column { flex: 0 0 280px; background-color: #ecf0f1; border-radius: 8px; padding: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .order-column h2 { font-size: 1.2em; border-bottom: 2px solid #bdc3c7; padding-bottom: 10px; margin-bottom: 15px; color: #2c3e50; }
+        .card-container { min-height: 100px; }
+        .order-card { 
+            background-color: #ffffff; 
+            border-radius: 6px; 
+            padding: 15px; 
+            margin-bottom: 15px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            border-left: 5px solid transparent; /* Base border */
+        }
+        
+        /* CARD HEADER STYLES */
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .order-card h3 { 
+            margin: 0; 
+            font-size: 1.1em; 
+            color: #2c3e50; 
+            font-weight: bold;
+        }
+        .order-card .order-number-tag {
+            background-color: #f1c40f; 
+            color: #2c3e50;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+        .order-card .time { font-size: 0.8em; color: #95a5a6; }
+        
+        .items-list { list-style: none; padding: 0; margin: 10px 0; border-top: 1px dashed #ecf0f1; border-bottom: 1px dashed #ecf0f1; padding: 8px 0; }
+        .items-list li { font-size: 0.9em; margin-bottom: 5px; }
+        .modifiers { font-style: italic; color: #7f8c8d; }
+        .notes { background-color: #fcf8e3; border-left: 3px solid #f39c12; padding: 5px; margin-top: 10px; font-size: 0.9em; }
+        
+        /* STATUS COLOR CODING (Border-Left) */
+        /* New: White background (default), Blue border for distinction */
+        .status-new { border-left-color: #3498db; }
+        
+        /* Preparing: Red */
+        .status-preparing { border-left-color: #e74c3c; } 
+        
+        /* Ready: Orange */
+        .status-ready { border-left-color: #f39c12; }
+        
+        /* Collected: Green (Muted) */
+        .status-collected { border-left-color: #2ecc71; opacity: 0.8; }
+
+        /* Action Button */
+        .action-button { width: 100%; padding: 10px; margin-top: 10px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; transition: background-color 0.2s; color: white; }
+        .action-button:hover { opacity: 0.9; }
+        .status-new .action-button { background-color: #3498db; }
+        .status-preparing .action-button { background-color: #e67e22; } /* Keep original orange for action button */
+        .status-ready .action-button { background-color: #2ecc71; }
+        .collected-message { text-align: center; color: #7f8c8d; font-style: italic; margin-top: 10px; }
+        .empty-message { padding: 10px; background-color: #ecf0f1; border-radius: 4px; text-align: center; color: #7f8c8d; }
+        .footer-note { text-align: center; color: #95a5a6; margin-top: 20px; font-size: 0.8em; }
+    </style>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+</head>
+<body>
+
+    <div class="app-container">
+        <h1>🍽️ YUM! Live Order Status Board</h1>
+
+        <div class="order-form-container">
+            <h2>Place a New Order</h2>
+            <form id="order-form">
+                <div class="form-group">
+                    <label for="customerName">Your Name:</label>
+                    <input type="text" id="customerName" required>
+                </div>
+                <div class="form-group">
+                    <label for="item">Select Menu Item:</label>
+                    <select id="item" required>
+                        <option value="">-- Select an Item --</option>
+                        <option value="YUM! Burger Combo">YUM! Burger Combo</option>
+                        <option value="Chef's Salad">Chef's Salad</option>
+                        <option value="Deluxe Fries">Deluxe Fries</option>
+                        <option value="Soda / Drink">Soda / Drink</option>
+                        <option value="Kids Meal">Kids Meal</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="notes">Special Notes (e.g., No sauce, Allergy alert):</label>
+                    <textarea id="notes" rows="2"></textarea>
+                </div>
+                <button type="submit" class="submit-button">Place Order</button>
+            </form>
+            <p class="footer-note" style="margin-top: 15px;">Your order will appear instantly on the board below.</p>
+        </div>
+        <div class="board" id="order-board">
+            </div>
+        
+    </div>
+
+    <script>
+        // --- 1. FIREBASE CONFIGURATION (Your Keys Applied) ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyBP8uk8li1SfKpnQF7Ytcw-SwcqIJJhqns",
+            authDomain: "live-order-board-83896.firebaseapp.com",
+            projectId: "live-order-board-83896",
+            storageBucket: "live-order-board-83896.firebasestorage.app",
+            messagingSenderId: "766021554934",
+            appId: "1:766021554934:web:b52cbd95129602871d92d7"
+        };
+        
+        // --- 2. INITIALIZATION ---
+        const app = firebase.initializeApp(firebaseConfig);
+        const db = app.firestore();
+        const STATUSES = ['New', 'Preparing', 'Ready', 'Collected'];
+
+        // --- 3. HELPER FUNCTIONS ---
+
+        /** Updates the order status in Firestore (STAFF FUNCTION) */
+        async function updateOrderStatus(orderId, newStatus) {
+            try {
+                // This will fail if the user is not authenticated/staff (due to security rules)
+                await db.collection('orders').doc(orderId).update({
+                    status: newStatus,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                console.log(`Order ${orderId} updated to ${newStatus}`);
+            } catch (error) {
+                console.error("Error updating document: ", error);
+                alert("ERROR: Status change failed. Check security rules (must be authenticated).");
+            }
+        }
+
+        /** Creates a new order in Firestore (CUSTOMER FUNCTION) */
+        async function placeNewOrder(event) {
+            event.preventDefault(); // Stop the form from refreshing the page
+
+            const name = document.getElementById('customerName').value;
+            const item = document.getElementById('item').value;
+            const notes = document.getElementById('notes').value;
+
+            if (!name || !item) {
+                alert("Please enter your name and select an item.");
+                return;
+            }
+            
+            // GENERATE A SIMPLE 4-DIGIT ORDER NUMBER (Based on current timestamp)
+            // This ensures a unique, easy-to-read reference number.
+            const orderNum = (Math.floor(Date.now() / 1000) % 10000).toString().padStart(4, '0');
+
+            const itemsArray = [{ name: item, quantity: 1, modifiers: [] }];
+            
+            try {
+                await db.collection('orders').add({
+                    customerName: name, 
+                    orderNumber: orderNum, // The 4-digit reference number
+                    status: 'New', 
+                    notes: notes,
+                    items: itemsArray,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    totalPrice: 5.00 
+                });
+
+                document.getElementById('order-form').reset(); // Clear the form
+                alert(`Order Placed! Your Order No. is: ${orderNum}`);
+            } catch (error) {
+                console.error("Error adding document: ", error);
+                alert("ERROR: Could not place order. Ensure Firestore Rules allow 'create'.");
+            }
+        }
+        
+        /** Determines the next status stage for the button click */
+        function getNextStatus(currentStatus) {
+            switch (currentStatus) {
+                case 'New': return 'Preparing';
+                case 'Preparing': return 'Ready';
+                case 'Ready': return 'Collected';
+                default: return null;
+            }
+        }
+        
+        /** Generates the HTML for a single order card */
+        function createOrderCardHTML(order) {
+            const nextStatus = getNextStatus(order.status);
+            const buttonText = getNextStatus(order.status) ? (
+                order.status === 'New' ? 'Start Preparing \u2192' : 
+                order.status === 'Preparing' ? 'Ready for Pickup \u2192' :
+                'Mark as Collected'
+            ) : 'Closed';
+
+            // Format timestamp
+            const time = order.createdAt ? new Date(order.createdAt.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A';
+
+            const itemsHTML = (order.items || []).map(item => `
+                <li>
+                    ${item.quantity}x <strong>${item.name}</strong>
+                    ${item.modifiers && item.modifiers.length > 0 ? `<span class="modifiers"> (${item.modifiers.join(', ')})</span>` : ''}
+                </li>
+            `).join('');
+
+            const buttonHTML = nextStatus ? `
+                <button class="action-button" onclick="updateOrderStatus('${order.id}', '${nextStatus}')">
+                    ${buttonText}
+                </button>
+            ` : `<p class="collected-message">Order Collected</p>`;
+
+            return `
+                <div class="order-card status-${order.status.toLowerCase()}">
+                    <div class="card-header">
+                        <span class="order-number-tag">${order.orderNumber || 'N/A'}</span>
+                        <h3>${order.customerName || 'N/A'}</h3>
+                        <p class="time">Placed: ${time}</p>
+                    </div>
+                    
+                    <ul class="items-list">${itemsHTML}</ul>
+                    
+                    ${order.notes ? `<p class="notes">Notes: ${order.notes}</p>` : ''}
+                    
+                    ${buttonHTML}
+                </div>
+            `;
+        }
+        
+        /** Renders all columns and populates them with cards */
+        function renderBoard(orders) {
+            const boardElement = document.getElementById('order-board');
+            boardElement.innerHTML = ''; 
+
+            // Group orders by status
+            const ordersByStatus = STATUSES.reduce((acc, status) => {
+                acc[status] = orders.filter(order => order.status === status);
+                return acc;
+            }, {});
+
+            STATUSES.forEach(status => {
+                const column = document.createElement('div');
+                column.className = 'order-column';
+                
+                const columnOrders = ordersByStatus[status];
+                const cardContainer = document.createElement('div');
+                cardContainer.className = 'card-container';
+
+                if (columnOrders.length === 0) {
+                    cardContainer.innerHTML = `<p class="empty-message">No orders in this stage.</p>`;
+                } else {
+                    // Sort by the simple order number for display clarity
+                    columnOrders.sort((a, b) => a.orderNumber - b.orderNumber); 
+                    cardContainer.innerHTML = columnOrders
+                        .map(order => createOrderCardHTML(order))
+                        .join('');
+                }
+
+                column.innerHTML = `<h2>${status} (${columnOrders.length})</h2>`;
+                column.appendChild(cardContainer);
+                boardElement.appendChild(column);
+            });
+        }
+
+
+        // --- 4. REAL-TIME LISTENER & INITIAL SETUP ---
+
+        function startRealtimeListener() {
+            // Attach the submit handler to the form
+            document.getElementById('order-form').addEventListener('submit', placeNewOrder);
+            
+            // Start the real-time query
+            db.collection("orders")
+              .orderBy("createdAt", "asc")
+              .onSnapshot(snapshot => {
+                const liveOrders = [];
+                snapshot.forEach(doc => {
+                    liveOrders.push({ id: doc.id, ...doc.data() });
+                });
+                
+                renderBoard(liveOrders);
+
+              }, error => {
+                console.error("Realtime listener failed: ", error);
+                document.getElementById('order-board').innerHTML = '<p style="color:red; text-align:center;">ERROR: Could not connect to Firebase. Check keys and security rules.</p>';
+              });
+        }
+        
+        // Start the application once the window loads
+        window.onload = startRealtimeListener;
+        
+    </script>
+    </body>
+</html>
